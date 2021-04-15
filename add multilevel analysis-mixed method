@@ -1,0 +1,544 @@
+use "C:\Users\Yang hee Shin\Desktop\spring 2019\multilevel modelling\ESS1and7v10.dta", clear
+global path "C:\Users\Yang hee Shin\Desktop\spring 2019\multilevel modelling\"
+
+gen ccode = .
+replace ccode=40 if cntry=="AT"
+replace ccode=56 if cntry=="BE"
+replace ccode=100 if cntry=="BG"
+replace ccode=756 if cntry=="CH"
+replace ccode=196 if cntry=="CY"
+replace ccode=203 if cntry=="CZ"
+replace ccode=276 if cntry=="DE"
+replace ccode=208 if cntry=="DK"
+replace ccode=233 if cntry=="EE"
+replace ccode=724 if cntry=="ES"
+replace ccode=246 if cntry=="FI"
+replace ccode=250 if cntry=="FR"
+replace ccode=826 if cntry=="GB"
+replace ccode=300 if cntry=="GR"
+replace ccode=191 if cntry=="HR"
+replace ccode=348 if cntry=="HU"
+replace ccode=372 if cntry=="IE"
+replace ccode=380 if cntry=="IT"
+replace ccode=440 if cntry=="LT"
+replace ccode=442 if cntry=="LU"
+replace ccode=528 if cntry=="NL"
+replace ccode=578 if cntry=="NO"
+replace ccode=616 if cntry=="PL"
+replace ccode=620 if cntry=="PT"
+replace ccode=752 if cntry=="SE"
+replace ccode=705 if cntry=="SI"
+replace ccode=703 if cntry=="SK"
+replace ccode=792 if cntry=="TR"
+replace ccode=804 if cntry=="UA"
+
+recode essround (1=2002)(7=2014), gen(year)
+
+gen ins = 0
+replace ins = 1 if cntry=="IL"
+replace ins = 1 if cntry=="LT"
+replace ins = 1 if ccode==233 | ccode==705 | ccode==440
+sort ccode year
+
+gen weight2=pspwght*pweight
+label var weight2 "Post-Strat*Population Weight"
+cd "${path}"  
+save multilevel.dta, replace  
+
+*merging macro variables
+cd "${path}"
+use macro.dta
+merge m:m ccode using multilevel.dta
+drop if _merge==1                
+drop _merge                      
+save multilevel.dta, replace
+
+replace exp_2002=. if year==2014
+replace exp_2014=. if year==2002
+replace uni_2002=. if year==2014
+replace uni_2014=. if year==2002
+replace gdp_2002=. if year==2014
+replace gdp_2014=. if year==2002
+replace une_2002=. if year==2014
+replace une_2014=. if year==2002
+
+egen edu_exp = rowtotal(exp_2002 exp_2014)
+egen tet_enroll = rowtotal(uni_2002 uni_2014)
+egen gdp = rowtotal(gdp_2002 gdp_2014)
+egen na_unemp = rowtotal(une_2002 une_2014)
+replace edu_exp = edu_exp / 100
+replace tet_enroll = tet_enroll / 100
+replace gdp = ln(gdp)
+replace na_unemp = na_unemp / 100
+
+* Numeric variables
+quietly label dir 					
+foreach v in `r(names)' {
+	capture confirm variable `v'
+	if !_rc {
+		quietly label list `v'	
+		local length = length("`r(max)'")
+		local format = (10^`length'-1)/9
+		local 6 = 6*`format'
+		local 7 = 7*`format'
+		local 8 = 8*`format'
+		local 9 = 9*`format'
+
+		local a : label `v' `6'
+		if regexm("`a'","Not .p+lic+able")  {
+			local r `6'=. \
+		}
+		local b : label `v' `7'
+		if regexm("`b'","Refus..") {
+			local r `r' `7'=. \
+		}
+		local c : label `v' `8'
+		if regexm("`c'","Don.?t .now") {
+			local r `r' `8'=. \
+		}
+		local d : label `v' `9'
+		if regexm("`d'","[No .nswer|Not .vailable]") {
+			local r `r' `9'=. \
+		}
+		if !missing("`r'") mvdecode `v', mv(`r')
+		local r
+	}
+}
+
+* String variables
+quietly ds, has(type string)
+foreach v of varlist `r(varlist)' {	
+	local length = substr("`:type `v''",4,4)
+	local format = (10^`length'-1)/9
+	local 6 = 6*`format'
+	local 7 = 7*`format'
+	local 8 = 8*`format'
+	local 9 = 9*`format'
+	di "`v'"
+	replace `v'= "" if inlist(`v',"`9'","`8'","`7'","`6'")
+}
+
+
+
+egen noanswer=rowmiss (noimbro estsz emplrel lrscale trstep jbspv trstun imdetbs imdetmr ipstrgv iprspot ipfrule ipsuces ipbhprp ipcrtiv ipshabt ipudrst ipmodst ipgdtim impfree ipadvnt iplylfr impenv imptrad impfun ipeqopt impsafe impdiff iphlppl imprich eimpcnt imbleco stfgov lwdscwp stfedu imbgeco imwbcrm tvpol imueclt imwbcnt gvrfgap impcntr imtcjob imdfetn wrkorg stfdem imsmetn freehms trstprl hincfel emprf14 trstlgl stfeco clsprty gincdif qfimchr qfimedu qfimwht trstplt sclact qfimwsk pplstrd blgetmg qfimcmt acetalv emprm14 pray qfimlng eduyrs trstplc vote stfhlth aesfdrk dscrgrp mnactic pplfair sclmeet mbtru bctprd rlgdgr atncrse sgnptit facntr pplhlp stflife happy rlgblg uemp3m badge pbldmn rlgatnd domicil eisced ppltrst polintr contplt wrkprty crmvct hlthhmp mocntr chldhm tvtot hhmmb health ctzcntr brncntr)
+
+gen nrrate=noanswer/106
+egen no_mis=rowmiss (noimbro)
+
+gen agea1 = agea
+recode agea1 (85/114=85) (999=.)
+replace agea1 = agea1/85
+gen gndr1 = gndr if gndr<3
+recode gndr1 (2=0) (1=1) (*=.)
+gen marry=partner if partner<3
+recode marry (2=0) (1=1) (*=.)
+gen urban=domicil if domicil<6
+gen suburb=domicil if domicil<6
+gen rural=domicil if domicil<6
+recode urban (1=1) (*=0)
+recode suburb (2=1) (*=0)
+recode rural (3 4 5 =1)(*=0)
+gen hhmmb1 = hhmmb if hhmmb<16
+recode hhmmb1 (6/15=6)
+gen blgetmg1 = blgetmg if blgetmg <3
+recode blgetmg1 (1=0) (2=1) (*=.)
+recode uemp12m (1=1) (2=0) (*=0), gen(uemp12)
+
+recode iscoco (1000/3000=1)(*=0), gen(hskilled)
+recode iscoco (8000/10000=1)(*=0), gen(mannual)
+recode isco08 (1000/3000=1)(*=0), gen(hskilled7)
+recode isco08 (8000/10000=1)(*=0), gen(mannual7)
+egen hskilled_m = rowtotal(hskilled hskilled7)
+egen manual_m = rowtotal(mannual mannual7)
+
+gen imgfrnd1 = imgfrnd if imgfrnd<4
+replace imgfrnd1= imgfrnd1 -1
+gen imgfrnd7 = dfegcf if dfegcf<4
+replace imgfrnd7= imgfrnd7 -1
+egen imgfrnd_m = rowtotal(imgfrnd1 imgfrnd7)
+gen tvpol1=tvpol if tvpol <8
+gen sclmeet1 = sclmeet if sclmeet<8
+replace sclmeet1 = sclmeet1-1
+gen dscrgrp1 = dscrgrp if dscrgrp<3
+recode dscrgrp1 (1=1) (2=0) (*=0)
+
+gen imwbcnt1 = imwbcnt if imwbcnt <11
+gen imbgeco1 = imbgeco if imbgeco <11
+gen imtcjob1 = imtcjob if imtcjob <11
+gen imbleco1 = imbleco if imbleco <11
+gen imwbcrm1 = imwbcrm if imwbcrm <11
+gen imueclt1 = imueclt if imueclt <11
+egen perceive = rowmean(imwbcnt1 imbgeco1 imtcjob1 imbleco1 imwbcrm1 imueclt1)
+
+recode eduyrs (0/6=1) (7/9=2) (10/12=3) (13/14=4) (15/16=5) (17/50=6) (*=.), gen(edui1)
+numlabel eiscedf, add
+recode edulvlfa (0 55 66 77 88 99=.), gen(edulvlfa1)
+gen eiscedf1=eiscedf if eiscedf<8
+recode eiscedf1 (0 1=1) (2=2) (3 4=3) (5=4) (6 7=5) (*=.)
+egen edulvlfa_m=rowtotal(edulvlfa1 eiscedf1)
+recode edulvlfa_m (0 1=1) (2=2) (3=3) (4=4) (5=5) (*=.)
+
+gen atncrse1 = atncrse if atncrse<3
+recode atncrse1 (1=1) (2=0)
+
+gen stfdem1 = stfdem if stfdem<11
+gen stfeco1 = stfeco if stfeco <11
+
+recode emplrel (2 3 =0) (1=1) (*=.), gen(emp1)
+recode occf14b (1 2=1) (3 4=2) (5=3) (6 7=4) (8 9=5) (*=0), gen (occfa7)
+recode occf14 (1 2 4=1) (3 8 =2) (6=3) (5=4) (7=5) (*=0), gen (occfa1)
+egen occfa_m=rowtotal(occfa7 occfa1)
+recode ipudrst (1=6) (2=5) (3=4) (4=3) (5=2) (6=1), gen (ipudrst1)
+recode ipbhprp (1=6) (2=5) (3=4) (4=3) (5=2) (6=1), gen (ipbhprp1)
+
+gen int_exp_tet = edu_exp * edui1
+recode domicil(3 4 5 = 2) (2=1) (1=0) (*=.), gen (domicil1)
+*rural > suburban > urban=0
+gen int_res_frnd = domicil1 * imgfrnd_m
+
+label var edulvlfa_m "father's education"
+label var emp1 "being employed"
+label var edui1 "education of respondents"
+label var no_mis "no answer of the nummeracy question"
+label var atncrse1 "learning courses"
+label var ipudrst1 "understanding others"
+label var ipbhprp1 "behaving properly"
+label var nrrate "non-response rate"
+label var stfdem1 "satisfaction with democracy"
+label var stfeco1 "satisfaction with economy"
+label var perceive "perception to immigrants"
+label var occfa_m "father's occupation"
+label var agea1 "age"
+label var gndr1 "gender"
+label var marry "marriage(partner)"
+label var urban "residence-urban"
+label var suburb "residence-suburban"
+label var rural "residence-rural"
+label var hhmmb1 "the number of house members"
+label var blgetmg1 "minority"
+label var uemp12m "unemployment over 12 month"
+label var hskilled_m "high-skilled job"
+label var manual_m "manual job"
+label var imgfrnd_m "contact of immigrant friends"
+label var tvpol1 "hours a day for watching TV News"
+label var sclmeet1 "intimacy with friends"
+label var dscrgrp1 "feeling discriminated"
+label var edu_exp "education expenditure in GDP"
+label var tet_enroll "tertiary enrollment"
+label var na_unemp "unemployment rate"
+label var gdp "GDP per capita of PPP (natural log)"
+label var int_exp_tet "interaction effects of gov. expenditure with respondent's education level"
+label var int_res_frnd "interaction effects of location with immigrant friends"
+
+sum edu_exp-ipbhprp1
+tabulate occfa_m edulvlfa_m
+tabulate edulvlfa_m edui1
+tabulate edui1 no_mis
+tabulate edulvlfa_m no_mis
+tabstat edulvlfa_m emp1  edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 ///
+  uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 [aw=dweight], statistics(mean sd min max)
+*by country
+tabstat edulvlfa_m emp1  edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m agea1 gndr1 marry urban suburb rural hhmmb1 ///
+   blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 [aw=dweight], by(cntry) statistics(mean)
+tabstat edulvlfa_m emp1  edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m agea1 gndr1 marry urban suburb rural hhmmb1 ///
+   blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 [aw=dweight], by(cntry) statistics(sd)
+*by respondent' education and by father's education
+tabstat edulvlfa_m atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m [aw=dweight], by(edui1) statistics(mean sd)
+tabstat edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m [aw=dweight], by(edulvlfa_m) statistics(mean sd)
+*t-test of DV
+ttest edulvlfa_m, by(no_mis) 
+ttest emp1, by(no_mis) 
+ttest edui1, by(no_mis) 
+ttest atncrse1, by(no_mis) 
+ttest ipudrst1, by(no_mis) 
+ttest ipbhprp1, by(no_mis) 
+ttest nrrate, by(no_mis) 
+ttest stfdem1, by(no_mis) 
+ttest stfeco1, by(no_mis) 
+ttest perceive, by(no_mis) 
+ttest occfa_m, by(no_mis)
+*t-test of control variable
+ttest agea1, by(no_mis)
+ttest gndr1, by(no_mis)
+ttest marry, by(no_mis)
+ttest urban, by(no_mis)
+ttest suburb, by(no_mis)
+ttest rural, by(no_mis)
+ttest hhmmb1, by(no_mis)
+ttest blgetmg1, by(no_mis)
+ttest uemp12m, by(no_mis)
+ttest hskilled_m, by(no_mis)
+ttest manual_m, by(no_mis)
+ttest imgfrnd_m, by(no_mis)
+ttest tvpol1, by(no_mis)
+ttest sclmeet1, by(no_mis)
+ttest dscrgrp1, by(no_mis)
+*t-test summary
+estpost ttest edulvlfa_m emp1 edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1, by(no_mis)
+*correlation matrix
+pwcorr edulvlfa_m emp1 edui1 atncrse1 ipudrst1 ipbhprp1 nrrate stfdem1 stfeco1 perceive occfa_m agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 year, star(0.01)
+
+*mixed model with robust std. error and AIC/BIC estimates: null - add one hierarchy - exogeneous factors - control factors - full model(IV + Int.Effects)
+
+*H1-a: logistic model- GLLAMM doesn't work except for the empty model
+/* gllamm atncrse1, i(ccode) link(ologit) family(binom) nip(25) adapt
+estat ic
+est store empty_1a
+gllamm atncrse1 edu_exp tet_enroll na_unemp gdp year, i(no_mis ccode) link(ologit) family(binom) nip(25) adapt
+estat ic
+est store exo_1a
+gllamm atncrse1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp year, i(no_mis ccode) link(ologit) family(binom) nip(25) adapt
+estat ic
+est store con_1a
+gllamm atncrse1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd year, i(no_mis ccode) link(ologit) family(binom) nip(25) adapt
+estat ic
+est store full_1a */
+bootstrap _b, cluster(ccode) idcluster(newccode) rep(2): xtmelogit atncrse1 || newccode: no_mis, intpoint(2) or var
+estat ic
+est store empty_1a
+bootstrap _b, cluster(ccode) idcluster(newccode) rep(2): xtmelogit atncrse1 edu_exp tet_enroll na_unemp gdp year || newccode: , intpoint(1) or var
+estat ic
+est store exo_1a
+bootstrap _b, cluster(ccode) idcluster(newccode) rep(2): xtmelogit atncrse1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp year || newccode: , intpoint(1) or var
+estat ic
+est store con_1a
+bootstrap _b, cluster(ccode) idcluster(newccode) rep(2): xtmelogit atncrse1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd year || newccode: , intpoint(1) or var
+estat ic
+est store full_1a
+
+*H1-b: exclude Italy(IL), Estonia(EE), and Lituania(LT) => ins==1
+mixed ipudrst1 if ins==0 ||ccode: no_mis, vce(robust) variance ml
+estat ic
+est store empty_1b
+mixed ipudrst1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_1b
+mixed ipudrst1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_1b
+mixed ipudrst1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_1b
+*H1-c
+mixed ipbhprp1 if ins==0 ||ccode: , vce(robust) variance ml
+estat ic
+est store empty_1c
+mixed ipbhprp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_1c
+mixed ipbhprp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_1c
+mixed ipbhprp1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year if ins==0 ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_1c
+*H2-a
+mixed nrrate ||ccode: , variance ml
+estat ic
+est store empty_2a
+mixed nrrate edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat ic
+est store exo_2a
+mixed nrrate agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_2a
+mixed nrrate emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_2a
+*H2-b
+mixed stfdem1 ||ccode: , vce(robust) variance ml
+estat ic
+est store empty_2b
+mixed stfdem1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_2b
+mixed stfdem1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_2b
+mixed stfdem1 emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_2b
+*H2-c
+mixed stfeco1 ||ccode: , vce(robust) variance ml
+estat ic
+est store empty_2c
+mixed stfeco1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_2c
+mixed stfeco1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_2c
+mixed stfeco1 emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_2c
+*H3-a: the education level of respondents of IV are excluded in controls
+mixed perceive ||ccode: , variance ml
+estat ic
+est store empty_3a
+mixed perceive edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_3a
+mixed perceive agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_3a
+mixed perceive edui1 agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_3a
+*H3-b: answering the numeracy question of IV is excluded in the hierarchy
+mixed nrrate ||ccode: , vce(robust) variance ml
+estat ic
+est store empty_3b
+mixed nrrate edu_exp tet_enroll na_unemp gdp i.year ||ccode: , vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_3b
+mixed nrrate agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_3b
+mixed nrrate no_mis agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode:, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_3b
+*H3-c: answering the numeracy question of IV & education level of DV are excluded in the hierarchy
+mixed edui1 ||ccode: , vce(robust) variance ml
+estat ic
+est store empty_3c
+mixed edui1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store exo_3c
+mixed edui1 agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store con_3c
+mixed edui1 no_mis agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode:, vce(robust) variance ml cov(unstr) nolog
+estat ic
+est store full_3c
+
+esttab empty_1a exo_1a con_1a full_1a, star b stats(N r2)
+esttab empty_1b exo_1b con_1b full_1b, star b stats(N r2)
+esttab empty_1c exo_1c con_1c full_1c, star b stats(N r2)
+esttab empty_2a exo_2a con_2a full_2a, star b stats(N r2)
+esttab empty_2b exo_2b con_2b full_2b, star b stats(N r2)
+esttab empty_2c exo_2c con_2c full_2c, star b stats(N r2)
+esttab empty_3a exo_3a con_3a full_3a, star b stats(N r2)
+esttab empty_3b exo_3b con_3b full_3b, star b stats(N r2)
+esttab empty_3c exo_3c con_3c full_3c, star b stats(N r2)
+esttab empty_1a exo_1a con_1a full_1a using H1a.rtf, label replace
+esttab empty_1b exo_1b con_1b full_1b using H1b.rtf, label replace
+esttab empty_1c exo_1c con_1c full_1c using H1c.rtf, label replace
+esttab empty_2a exo_2a con_2a full_2a using H2a.rtf, label replace
+esttab empty_2b exo_2b con_2b full_2b using H2b.rtf, label replace
+esttab empty_2c exo_2c con_2c full_2c using H2c.rtf, label replace
+esttab empty_3a exo_3a con_3a full_3a using H3a.rtf, label replace
+esttab empty_3b exo_3b con_3b full_3b using H3b.rtf, label replace
+esttab empty_3c exo_3c con_3c full_3c using H3c.rtf, label replace
+esttab empty_1a exo_1a con_1a full_1a empty_1b exo_1b con_1b full_1b empty_1c exo_1c con_1c full_1c using H1.csv, label replace
+esttab empty_2a exo_2a con_2a full_2a empty_2b exo_2b con_2b full_2b empty_2c exo_2c con_2c full_2c using H2.csv, label replace
+esttab empty_3a exo_3a con_3a full_3a empty_3b exo_3b con_3b full_3b empty_3c exo_3c con_3c full_3c using H3.csv, label replace
+
+*mixed model for ICC and LR-test value: robust residuals can't estimate ICC and LR-test
+*H1-a: logistic model is possible to estimate LR and ICC
+*H1-b: exclude Italy(IL), Estonia(EE), and Lituania(LT) => ins==1
+mixed ipudrst1 if ins==0 ||ccode: , variance ml
+estat icc
+est store empty_1b
+mixed ipudrst1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_1b
+mixed ipudrst1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_1b
+mixed ipudrst1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_1b
+*H1-c
+mixed ipbhprp1 if ins==0 ||ccode: , variance ml
+estat icc
+est store empty_1c
+mixed ipbhprp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_1c
+mixed ipbhprp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_1c
+mixed ipbhprp1 edulvlfa_m agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year if ins==0 ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_1c
+*H2-a
+mixed nrrate ||ccode: , variance ml
+estat icc
+est store empty_2a
+mixed nrrate edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_2a
+mixed nrrate agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_2a
+mixed nrrate emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_2a
+*H2-b
+mixed stfdem1 ||ccode: , variance ml
+estat icc
+est store empty_2b
+mixed stfdem1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_2b
+mixed stfdem1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_2b
+mixed stfdem1 emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_2b
+*H2-c
+mixed stfeco1 ||ccode: , variance ml
+estat icc
+est store empty_2c
+mixed stfeco1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_2c
+mixed stfeco1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_2c
+mixed stfeco1 emp1 agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_2c
+*H3-a: the education level of respondents of IV are excluded in controls
+mixed perceive ||ccode: , variance ml
+estat icc
+est store empty_3a
+mixed perceive edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store exo_3a
+mixed perceive agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store con_3a
+mixed perceive edui1 agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode: no_mis, variance ml cov(unstr) nolog
+estat icc
+est store full_3a
+*H3-b: answering the numeracy question of IV is excluded in the hierarchy
+mixed nrrate ||ccode: , variance ml
+estat icc
+est store empty_3b
+mixed nrrate edu_exp tet_enroll na_unemp gdp i.year ||ccode: , variance ml cov(unstr) nolog
+estat icc
+est store exo_3b
+mixed nrrate agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, variance ml cov(unstr) nolog
+estat icc
+est store con_3b
+mixed nrrate no_mis agea1 gndr1 edui1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode:, variance ml cov(unstr) nolog
+estat icc
+est store full_3b
+*H3-c: answering the numeracy question of IV & education level of DV are excluded in the hierarchy
+mixed edui1 ||ccode: , variance ml
+estat icc
+est store empty_3c
+mixed edui1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, variance ml cov(unstr) nolog
+estat icc
+est store exo_3c
+mixed edui1 agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp i.year ||ccode:, variance ml cov(unstr) nolog
+estat icc
+est store con_3c
+mixed edui1 no_mis agea1 gndr1 marry urban suburb rural hhmmb1 blgetmg1 uemp12m hskilled_m manual_m imgfrnd_m tvpol1 sclmeet1 dscrgrp1 edu_exp tet_enroll na_unemp gdp int_exp_tet int_res_frnd i.year ||ccode:, variance ml cov(unstr) nolog
+estat icc
+est store full_3c
+
+*check the number of missing value
+misschk noimbro estsz emplrel lrscale trstep jbspv trstun imdetbs imdetmr ipstrgv iprspot ipfrule ipsuces ipbhprp ipcrtiv ipshabt ipudrst ipmodst ipgdtim impfree ipadvnt iplylfr impenv imptrad impfun ipeqopt impsafe impdiff iphlppl imprich eimpcnt imbleco stfgov lwdscwp stfedu imbgeco imwbcrm tvpol imueclt imwbcnt gvrfgap impcntr imtcjob imdfetn wrkorg stfdem imsmetn freehms trstprl hincfel emprf14 trstlgl stfeco clsprty gincdif qfimchr qfimedu qfimwht trstplt sclact qfimwsk pplstrd blgetmg qfimcmt acetalv emprm14 pray qfimlng eduyrs trstplc vote stfhlth aesfdrk dscrgrp mnactic pplfair sclmeet mbtru bctprd rlgdgr atncrse sgnptit facntr pplhlp stflife happy rlgblg uemp3m badge pbldmn rlgatnd domicil eisced ppltrst polintr contplt wrkprty crmvct hlthhmp mocntr chldhm tvtot hhmmb health ctzcntr brncntr
