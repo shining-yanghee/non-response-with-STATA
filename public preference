@@ -1,0 +1,185 @@
+use "C:\Users\Yang hee Shin\Desktop\Public preference\statistics_book\ESS1and7v10.dta", clear
+
+gen ccode = .
+replace ccode=40 if cntry=="AT"
+replace ccode=56 if cntry=="BE"
+replace ccode=100 if cntry=="BG"
+replace ccode=756 if cntry=="CH"
+replace ccode=196 if cntry=="CY"
+replace ccode=203 if cntry=="CZ"
+replace ccode=276 if cntry=="DE"
+replace ccode=208 if cntry=="DK"
+replace ccode=233 if cntry=="EE"
+replace ccode=724 if cntry=="ES"
+replace ccode=246 if cntry=="FI"
+replace ccode=250 if cntry=="FR"
+replace ccode=826 if cntry=="GB"
+replace ccode=300 if cntry=="GR"
+replace ccode=191 if cntry=="HR"
+replace ccode=348 if cntry=="HU"
+replace ccode=372 if cntry=="IE"
+replace ccode=380 if cntry=="IT"
+replace ccode=440 if cntry=="LT"
+replace ccode=442 if cntry=="LU"
+replace ccode=528 if cntry=="NL"
+replace ccode=578 if cntry=="NO"
+replace ccode=616 if cntry=="PL"
+replace ccode=620 if cntry=="PT"
+replace ccode=752 if cntry=="SE"
+replace ccode=705 if cntry=="SI"
+replace ccode=703 if cntry=="SK"
+replace ccode=792 if cntry=="TR"
+replace ccode=804 if cntry=="UA"
+
+recode essround (1=2002)(7=2014), gen(year)
+
+gen ins = 0
+replace ins = 1 if cntry=="IL"
+replace ins = 1 if cntry=="LT"
+replace ins = 1 if ccode==233 | ccode==705 | ccode==440
+sort ccode year
+
+gen weight2=pspwght*pweight
+label var weight2 "Post-Strat*Population Weight"
+
+
+
+* Numeric variables
+quietly label dir 					
+foreach v in `r(names)' {
+	capture confirm variable `v'
+	if !_rc {
+		quietly label list `v'	
+		local length = length("`r(max)'")
+		local format = (10^`length'-1)/9
+		local 6 = 6*`format'
+		local 7 = 7*`format'
+		local 8 = 8*`format'
+		local 9 = 9*`format'
+
+		local a : label `v' `6'
+		if regexm("`a'","Not .p+lic+able")  {
+			local r `6'=. \
+		}
+		local b : label `v' `7'
+		if regexm("`b'","Refus..") {
+			local r `r' `7'=. \
+		}
+		local c : label `v' `8'
+		if regexm("`c'","Don.?t .now") {
+			local r `r' `8'=. \
+		}
+		local d : label `v' `9'
+		if regexm("`d'","[No .nswer|Not .vailable]") {
+			local r `r' `9'=. \
+		}
+		if !missing("`r'") mvdecode `v', mv(`r')
+		local r
+	}
+}
+
+* String variables
+quietly ds, has(type string)
+foreach v of varlist `r(varlist)' {	
+	local length = substr("`:type `v''",4,4)
+	local format = (10^`length'-1)/9
+	local 6 = 6*`format'
+	local 7 = 7*`format'
+	local 8 = 8*`format'
+	local 9 = 9*`format'
+	di "`v'"
+	replace `v'= "" if inlist(`v',"`9'","`8'","`7'","`6'")
+}
+
+
+egen noanswer=rowmiss(tvtot tvpol ppltrst pplfair pplhlp polintr trstprl trstlgl trstplc trstplt trstep trstun vote contplt wrkprty wrkorg badge sgnptit pbldmn bctprd clsprty prtdgcl lrscale stflife stfeco stfgov stfdem stfedu stfhlth gincdif freehms imsmetn imdfetn eimpcnt impcntr imbgeco imueclt imwbcnt happy sclmeet sclact crmvct aesfdrk health hlthhmp rlgblg rlgblge rlgdgr rlgatnd pray dscrgrp ctzcntr brncntr blgetmg facntr mocntr qfimedu qfimlng qfimchr qfimwht qfimwsk qfimcmt imtcjob imbleco imwbcrm imdetbs imdetmr acetalv pplstrd lwdscwp gvrfgap noimbro hhmmb chldhm chldhhe domicil eisced eduyrs mainact mnactic crpdwk pdjobev pdjobyr emplrel emplno estsz jbspv njbspv wkhct wkhtot uemp3m mbtru hincfel mnactp crpdwkp emprelp wkhtotp emprf14 emprm14 atncrse ipcrtiv imprich ipeqopt ipshabt impsafe impdiff ipfrule ipudrst ipmodst ipgdtim impfree iphlppl ipsuces ipstrgv ipadvnt ipbhprp iprspot iplylfr impenv imptrad impfun)
+
+gen nrrate=noanswer/121
+egen no_mis=rowmiss(noimbro)
+gen imwbcnt1 = imwbcnt if imwbcnt <11
+gen imbgeco1 = imbgeco if imbgeco <11
+gen imtcjob1 = imtcjob if imtcjob <11
+gen imbleco1 = imbleco if imbleco <11
+gen imwbcrm1 = imwbcrm if imwbcrm <11
+gen imueclt1 = imueclt if imueclt <11
+egen perceive = rowmean(imwbcnt1 imbgeco1 imtcjob1 imbleco1 imwbcrm1 imueclt1)
+
+recode eduyrs (0/6=1) (7/9=2) (10/12=3) (13/14=4) (15/16=5) (17/50=6) (*=.), gen(edui1)
+numlabel eiscedf, add
+recode edulvlfa (0 55 66 77 88 99=.), gen(edulvlfa1)
+gen eiscedf1=eiscedf if eiscedf<8
+recode eiscedf1 (0 1=1) (2=2) (3 4=3) (5=4) (6 7=5) (*=.)
+egen edulvlfa_m=rowtotal(edulvlfa1 eiscedf1)
+recode edulvlfa_m (0 1=1) (2=2) (3=3) (4=4) (5=5) (*=.)
+
+gen atncrse1 = atncrse if atncrse<3
+recode atncrse1 (1=1) (2=0)
+
+gen stfdem1 = stfdem if stfdem<11
+gen stfeco1 = stfeco if stfeco <11
+
+recode emplrel (2 3 =0) (1=1) (*=.), gen(emp1)
+recode occf14b (1 2=1) (3 4=2) (5=3) (6 7=4) (8 9=5) (*=0), gen (occfa7)
+recode occf14 (1 2 4=1) (3 8 =2) (6=3) (5=4) (7=5) (*=0), gen (occfa1)
+egen occfa_m=rowtotal(occfa7 occfa1)
+recode ipudrst (1=6) (2=5) (3=4) (4=3) (5=2) (6=1), gen (ipudrst1)
+recode ipbhprp (1=6) (2=5) (3=4) (4=3) (5=2) (6=1), gen (ipbhprp1)
+
+sum edulvlfa_m  emp1  edui1  atncrse1  ipudrst1  ipbhprp1  nrrate  stfdem1  stfeco1  perceive  occfa_m
+tabulate occfa_m edulvlfa_m
+tabulate edulvlfa_m edui1
+tabulate edui1 no_mis
+tabulate edulvlfa_m no_mis
+tabstat edulvlfa_m emp1  atncrse1  ipudrst1  ipbhprp1  nrrate  stfdem1  stfeco1  perceive  occfa_m [aw=dweight], by(edui1) statistics(mean sd)
+tabstat edui1  emp1  atncrse1  ipudrst1  ipbhprp1  nrrate  stfdem1  stfeco1  perceive  occfa_m [aw=dweight], by(edulvlfa_m) statistics(mean sd)
+
+ttest edulvlfa_m, by(no_mis) 
+ttest emp1, by(no_mis) 
+ttest edui1, by(no_mis) 
+ttest atncrse1, by(no_mis) 
+ttest ipudrst1, by(no_mis) 
+ttest ipbhprp1, by(no_mis) 
+ttest nrrate, by(no_mis) 
+ttest stfdem1, by(no_mis) 
+ttest stfeco1, by(no_mis) 
+ttest perceive, by(no_mis) 
+ttest occfa_m, by(no_mis)
+
+eststo: logit atncrse1 i.edulvlfa_m i.year if no_mis==0, cluster(ccode)
+eststo: logit atncrse1 i.edulvlfa_m i.year if no_mis==1, cluster(ccode)
+eststo: reg ipudrst1 i.edulvlfa_m i.year if no_mis==0, cluster(ccode)
+eststo: reg ipudrst1 i.edulvlfa_m i.year if no_mis==1, cluster(ccode)
+eststo: reg ipbhprp1 i.edulvlfa_m i.year if no_mis==0, cluster(ccode)
+eststo: reg ipbhprp1 i.edulvlfa_m i.year if no_mis==1, cluster(ccode)
+esttab est1 est2, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+esttab est3 est4 est5 est6, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+
+eststo: reg nrrate i.emp1 i.year if no_mis==0, cluster(ccode)
+eststo: reg nrrate i.emp1 i.year if no_mis==1, cluster(ccode)
+eststo: reg stfdem1 i.emp1 i.year if no_mis==0, cluster(ccode)
+eststo: reg stfdem1 i.emp1 i.year if no_mis==1, cluster(ccode)
+eststo: reg stfeco1 i.emp1 i.year if no_mis==0, cluster(ccode)
+eststo: reg stfeco1 i.emp1 i.year if no_mis==1, cluster(ccode)
+esttab est7 est8, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+esttab est9 est10 est11 est12, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+
+eststo: reg perceive i.edui1 i.year if no_mis==0, cluster(ccode)
+eststo: reg perceive i.edui1 i.year if no_mis==1, cluster(ccode)
+eststo: reg nrrate i.no_mis i.year, cluster(ccode)
+eststo: reg edui1 i.no_mis i.year, cluster(ccode)
+esttab est13 est14 est15 est16, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+
+eststo: reg edulvlfa_m i.occfa_m i.year if no_mis==0, cluster(ccode)
+eststo: reg edulvlfa_m i.occfa_m i.year if no_mis==1, cluster(ccode)
+eststo: reg edulvlfa_m i.edui1 i.year if no_mis==0, cluster(ccode)
+eststo: reg edulvlfa_m i.edui1 i.year if no_mis==1, cluster(ccode)
+esttab est17 est18 est19 est20, se(3) r2(3) b(3) wide alignment (S) star(* 0.05 ** 0.01 *** 0.001)
+
+*perceive with i.no_mis marginal effect plot
+reg perceive i.edui1 i.no_mis, cluster(ccode)
+quietly margins, at(edui1=(1(1)6) no_mis=(0 1))
+marginsplot, recastci(rarea) recast(line) xtitle(“The Level of Respondents’ Education”, size(large) margin(0 0 0 2)) ytitle(“Change in Perceptions to Immigrants”, size(large)) title(“Marginal Effects of Education on Perceptions at 95% of CI”) 
+
+*check the number of missing value
+misschk tvtot tvpol ppltrst pplfair pplhlp polintr trstprl trstlgl trstplc trstplt trstep trstun vote contplt wrkprty wrkorg badge sgnptit pbldmn bctprd clsprty prtdgcl lrscale stflife stfeco stfgov stfdem stfedu stfhlth gincdif freehms imsmetn imdfetn eimpcnt impcntr imbgeco imueclt imwbcnt happy sclmeet sclact crmvct aesfdrk health hlthhmp rlgblg rlgblge rlgdgr rlgatnd pray dscrgrp ctzcntr brncntr blgetmg facntr mocntr qfimedu qfimlng qfimchr qfimwht qfimwsk qfimcmt imtcjob imbleco imwbcrm imdetbs imdetmr acetalv pplstrd lwdscwp gvrfgap noimbro hhmmb chldhm chldhhe domicil eisced eduyrs mainact mnactic crpdwk pdjobev pdjobyr emplrel emplno estsz jbspv njbspv wkhct wkhtot uemp3m mbtru hincfel mnactp crpdwkp emprelp wkhtotp emprf14 emprm14 atncrse ipcrtiv imprich ipeqopt ipshabt impsafe impdiff ipfrule ipudrst ipmodst ipgdtim impfree iphlppl ipsuces ipstrgv ipadvnt ipbhprp iprspot iplylfr impenv imptrad impfun
+
